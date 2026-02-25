@@ -3,13 +3,17 @@ using HaroohiePals.Gui.View;
 using HaroohiePals.Gui.View.Menu;
 using HaroohiePals.Gui.View.Modal;
 using HaroohiePals.Gui.View.Toolbar;
+using HaroohiePals.MarioKartToolbox.Application.Discord;
 using HaroohiePals.MarioKartToolbox.Application.Settings;
 using HaroohiePals.MarioKartToolbox.Gui.ViewModel.CourseEditor;
 using HaroohiePals.NitroKart.Course;
 using HaroohiePals.NitroKart.MapData;
+using HaroohiePals.NitroKart.Extensions;
 using ImGuiNET;
+using NativeFileDialogs.Net;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace HaroohiePals.MarioKartToolbox.Gui.View.CourseEditor;
 
@@ -81,7 +85,8 @@ sealed class CourseEditorContentView : WindowContentView, IDisposable
         {
             Items =
                 {
-                    new ("Map Data Generator (Experimental)", _viewModel.ShowMapDataGenerator)
+                    new ("Map Data Generator (Experimental)", _viewModel.ShowMapDataGenerator),
+                    new ("Export KMP (Experimental)", () => { ExportKMP(); })
                 }
         }
     ];
@@ -118,6 +123,30 @@ sealed class CourseEditorContentView : WindowContentView, IDisposable
     public void Close()
     {
         _shouldClose = true;
+    }
+
+    private void ExportKMP()
+    {
+        var result = Nfd.SaveDialog(out string outPath, new Dictionary<string, string>
+        {
+            { "Wii Map Data JSON", "kmp.json" }
+        });
+
+        if (result == NfdStatus.Ok)
+            ExportKMP(outPath);
+    }
+
+    public void ExportKMP(string fileName)
+    {
+        var fileInfo = new FileInfo(fileName);
+        var mapData = _viewModel.Context.Course.MapData;
+        string ext = fileInfo.Extension.ToLower();
+
+        if (ext == ".json")
+        {
+            File.WriteAllBytes(fileName, mapData.WriteKMPJson());
+            
+        }
     }
 
     private void LoadCourse()
