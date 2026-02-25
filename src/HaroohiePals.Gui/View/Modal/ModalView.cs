@@ -9,18 +9,19 @@ public abstract class ModalView : IView
 
     private static readonly Vector2 DefaultSize = new Vector2(600, 400);
 
-    private bool _open;
-    private bool _close;
+    private bool _shouldOpen;
+    private bool _shouldClose;
 
     public string Title { get; }
     public Vector2 Size { get; protected set; }
     public bool ShowCloseButton { get; protected set; }
     public bool IsOpen { get; private set; }
+    public bool IsOpening => _shouldOpen;
 
-    public ModalView(string title) 
+    public ModalView(string title)
         : this(title, DefaultSize) { }
 
-    public ModalView(string title, Vector2 size) 
+    public ModalView(string title, Vector2 size)
         : this(title, size, DEFAULT_SHOW_CLOSE_BUTTON) { }
 
     public ModalView(string title, Vector2 size, bool showCloseButton)
@@ -32,26 +33,28 @@ public abstract class ModalView : IView
 
     public void Open()
     {
-        _open = true;
+        _shouldOpen = true;
     }
 
     public void Close()
     {
-        _close = true;
+        _shouldClose = true;
     }
+
+    public virtual void Update(UpdateArgs args) { }
 
     public bool Draw()
     {
-        if (_open)
+        if (_shouldOpen)
         {
             OnOpen();
             ImGui.OpenPopup(Title);
-            _open = false;
+            _shouldOpen = false;
         }
 
         bool open = true;
 
-        if (ShowCloseButton && ImGui.BeginPopupModal(Title, ref open) || ImGui.BeginPopupModal(Title))
+        if (ShowCloseButton && ImGui.BeginPopupModal(Title, ref open, ImGuiWindowFlags.NoSavedSettings) || ImGui.BeginPopupModal(Title))
         {
             IsOpen = true;
 
@@ -59,17 +62,17 @@ public abstract class ModalView : IView
 
             DrawContent();
 
-            if (_close)
+            if (_shouldClose)
             {
                 ImGui.CloseCurrentPopup();
-                _close = false;
+                _shouldClose = false;
                 open = false;
             }
 
             ImGui.EndPopup();
         }
 
-        if (!open)
+        if (IsOpen && !open)
         {
             IsOpen = false;
             OnClose();

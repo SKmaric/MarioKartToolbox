@@ -14,6 +14,7 @@ public class PerspectiveCameraControls
     public ViewportKeyBindings ViewportKeyBindings { get; set; } = new();
 
     public bool ShowViewCube { get; set; } = true;
+    public bool IsUsingViewCube => _viewCube.IsUsing;
 
     public void Update(ViewportContext context, float deltaTime)
     {
@@ -144,7 +145,7 @@ public class PerspectiveCameraControls
 
     private void RenderViewCube(ViewportContext context)
     {
-        var   contentPos          = ImGui.GetWindowPos() + ImGui.GetWindowContentRegionMin();
+        var contentPos = ImGui.GetWindowPos(); // + ImGui.GetWindowContentRegionMin();
         float viewManipulateRight = contentPos.X + context.ViewportSize.X;
         float viewManipulateTop   = contentPos.Y;
 

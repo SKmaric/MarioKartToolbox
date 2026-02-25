@@ -12,6 +12,9 @@ abstract class InteractiveViewportPanel : ViewportPanel
     protected readonly IApplicationSettingsService _applicationSettings;
     protected readonly Gizmo _gizmo;
     protected readonly RenderGroupVisibilityManager _visibilityManager;
+
+    protected bool _canUseSelectionRectangle = true;
+
     private readonly SelectionRectangle _selectionRect = new();
     private readonly RenderGroupScene _renderGroupScene;
     private readonly ViewportSideToolbar _sideToolbar = new();
@@ -63,7 +66,8 @@ abstract class InteractiveViewportPanel : ViewportPanel
             Context.PickingResult = PickingResult.Invalid;
 
         HandleSelectionRectangle();
-        RenderGizmos();
+        if (!_selectionRect.Dragging)
+            RenderGizmos();
         if (Context.SceneObjectHolder.SelectionSize == 0 || (!_gizmo.IsUsing && !_gizmo.IsOver && !_gizmo.IsUsingDrawTool))
             HandlePickingResult();
         _sideToolbar.Draw(Context, _gizmo);
@@ -75,14 +79,14 @@ abstract class InteractiveViewportPanel : ViewportPanel
 
     private void RenderGizmos()
     {
-        //if (!ImGui.IsWindowFocused())
-        //    return;
-
         _gizmo.Draw(Context);
     }
 
     private void HandleSelectionRectangle()
     {
+        if (!_canUseSelectionRectangle)
+            return;
+
         if (_renderGroupScene.FramebufferProvider is not IPickableFramebufferProvider pickableFramebufferProvider)
             return;
 
