@@ -2,16 +2,21 @@
 using HaroohiePals.NitroKart.MapData;
 using HaroohiePals.NitroKart.MapData.Intermediate;
 using HaroohiePals.NitroKart.MapData.Intermediate.Sections;
+using HaroohiePals.NitroKart.Race;
 using Newtonsoft.Json;
 using OpenTK.Mathematics;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using static HaroohiePals.NitroKart.MapData.Binary.NkmdCame;
 
 namespace HaroohiePals.NitroKart.Extensions
 {
@@ -19,21 +24,21 @@ namespace HaroohiePals.NitroKart.Extensions
     {
         private static bool skipUnknownObjs = true;
 
-        private static float mapScale = 1f;
-        private static float cameraFovScale = 2f;
+        private static float mapScale = 12.5f; // Default scale factor based on GLB export x 200 scale.
+        private static float cameraFovScale = 3f;
 
         private static readonly Dictionary<MkdsCameraType, string> CameraTypesDict
             = new Dictionary<MkdsCameraType, string>
         {
-            { MkdsCameraType.FixedLookAtDriver, "Goal" },
+            { MkdsCameraType.FixedLookAtDriver, "Fixed" },
             { MkdsCameraType.RouteLookAtDriver, "Path" },
             { MkdsCameraType.FixedLookAtTargets, "FixedMoveAt" },
             { MkdsCameraType.RouteLookAtTargets, "PathMoveAt" },
             { MkdsCameraType.IntroBottomPlaceholder, "PathMoveAt" },
             { MkdsCameraType.FollowDriverA, "Follow" },
-            { MkdsCameraType.FollowDriverB, "FollowPath" },
-            { MkdsCameraType.IntroMg, "FollowPath2" },
-            { MkdsCameraType.MrFinish, "FollowPath3" }
+            { MkdsCameraType.FollowDriverB, "Goal" },
+            { MkdsCameraType.IntroMg, "FollowPath3" },
+            { MkdsCameraType.MrFinish, "MissionSuccess" }
         };
 
         private static readonly Dictionary<MkdsAreaType, Byte> AreaTypesDict = new Dictionary<MkdsAreaType, Byte>
@@ -246,7 +251,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WriteValue(StartPoints[i].Index);
 
                                 writer.WritePropertyName("position");
-                                SerializeVector3(writer, StartPoints[i].Position);
+                                SerializeVector3(writer, StartPoints[i].Position, mapScale);
 
                                 writer.WritePropertyName("rotation");
                                 SerializeVector3(writer, StartPoints[i].Rotation);
@@ -304,7 +309,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                     writer.WriteStartObject();
 
                                     writer.WritePropertyName("deviation");
-                                    writer.WriteValue(EnemyPaths[i].Points[j].Radius * 0.02);
+                                    writer.WriteValue(EnemyPaths[i].Points[j].Radius * 0.02 * mapScale);
 
                                     writer.WritePropertyName("param");
                                     writer.WriteStartArray();
@@ -315,7 +320,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                     writer.WriteEndArray();
 
                                     writer.WritePropertyName("position");
-                                    SerializeVector3(writer, EnemyPaths[i].Points[j].Position);
+                                    SerializeVector3(writer, EnemyPaths[i].Points[j].Position, mapScale);
 
                                     writer.WriteEndObject();
                                 }
@@ -373,7 +378,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                     writer.WriteStartObject();
 
                                     writer.WritePropertyName("deviation");
-                                    writer.WriteValue(ItemPaths[i].Points[j].Radius * 0.02);
+                                    writer.WriteValue(ItemPaths[i].Points[j].Radius * 0.02 * mapScale);
 
                                     writer.WritePropertyName("param");
                                     writer.WriteStartArray();
@@ -384,7 +389,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                     writer.WriteEndArray();
 
                                     writer.WritePropertyName("position");
-                                    SerializeVector3(writer, ItemPaths[i].Points[j].Position);
+                                    SerializeVector3(writer, ItemPaths[i].Points[j].Position, mapScale);
 
                                     writer.WriteEndObject();
                                 }
@@ -448,13 +453,13 @@ namespace HaroohiePals.NitroKart.Extensions
                                         writer.WriteValue(CheckPointPaths[i].Points[j].KeyPointId >= 0 ? CheckPointPaths[i].Points[j].KeyPointId + 1 : 255);
 
                                     writer.WritePropertyName("mLeft");
-                                    SerializeVector2(writer, CheckPointPaths[i].Points[j].Point1);
+                                    SerializeVector2(writer, CheckPointPaths[i].Points[j].Point1, mapScale);
 
                                     writer.WritePropertyName("mRespawnIndex");
                                     writer.WriteValue(CheckPointPaths[i].Points[j].Respawn == null ? 255 : RespawnPoints.IndexOf(CheckPointPaths[i].Points[j].Respawn.Target));
 
                                     writer.WritePropertyName("mRight");
-                                    SerializeVector2(writer, CheckPointPaths[i].Points[j].Point2);
+                                    SerializeVector2(writer, CheckPointPaths[i].Points[j].Point2, mapScale);
 
                                     writer.WriteEndObject();
                                 }
@@ -469,10 +474,26 @@ namespace HaroohiePals.NitroKart.Extensions
                         {
                             for (int i = 0; i < Paths.Count; i++)
                             {
+                                MkdsCamera pathCamera = new MkdsCamera();
+                                bool isCameraRoute = false;
+
+                                foreach (var checkCamera in Cameras)
+                                {
+                                    if (checkCamera.Path != null)
+                                    {
+                                        if (checkCamera.Path.Target == Paths[i] && checkCamera.PathSpeed > 0)
+                                        {
+                                            pathCamera = checkCamera;
+                                            isCameraRoute = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
                                 writer.WriteStartObject();
 
                                 writer.WritePropertyName("interpolation");
-                                writer.WriteValue(0);
+                                writer.WriteValue(isCameraRoute && Paths[i].Points.Count >= 4 ? 1 : 0);
 
                                 writer.WritePropertyName("loopPolicy");
                                 writer.WriteValue(Convert.ToInt32(Paths[i].Loop));
@@ -482,32 +503,39 @@ namespace HaroohiePals.NitroKart.Extensions
 
                                 for (int j = 0; j < Paths[i].Points.Count; j++)
                                 {
+                                    if (isCameraRoute && Paths[i].Points.Count >= 4)
+                                    {
+                                        //Skip first and last control points
+                                        if (j <= 0 || j >= Paths[i].Points.Count - 1)
+                                            continue;
+                                    }
+
                                     writer.WriteStartObject();
 
                                     writer.WritePropertyName("params");
                                     writer.WriteStartArray();
 
-                                    bool isCameraRoute = false;
-                                    foreach (var checkCamera in Cameras)
+                                    if (isCameraRoute)
                                     {
-                                        if (checkCamera.Path != null)
+                                        if (Paths[i].Points.Count >= 4)
                                         {
-                                            if (checkCamera.Path.Target == Paths[i] && checkCamera.PathSpeed > 0)
-                                            {
-                                                writer.WriteValue((int)(checkCamera.PathSpeed * 4096f));
-                                                isCameraRoute = true;
-                                                break;
-                                            }
+                                            var routeTime = (int)((Paths[i].Points.Count - 3) / pathCamera.PathSpeed);
+                                            writer.WriteValue((int)((GetTotalPathLength(Paths[i]) * mapScale) / routeTime));
+                                        }
+                                        else
+                                        {
+                                            var routeTime = (int)((Paths[i].Points.Count - 1) / pathCamera.PathSpeed);
+                                            writer.WriteValue((int)((GetTotalPathLength(Paths[i], false) * mapScale) / routeTime));
                                         }
                                     }
-                                    if (!isCameraRoute)
+                                    else
                                         writer.WriteValue(0);
 
                                     writer.WriteValue(0);
                                     writer.WriteEndArray();
 
                                     writer.WritePropertyName("position");
-                                    SerializeVector3(writer, Paths[i].Points[j].Position);
+                                    SerializeVector3(writer, Paths[i].Points[j].Position, mapScale);
 
                                     writer.WriteEndObject();
                                 }
@@ -542,7 +570,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WriteValue(MapObjects[i].Path == null ? -1 : Paths.IndexOf(MapObjects[i].Path.Target));
 
                                 writer.WritePropertyName("position");
-                                SerializeVector3(writer, MapObjects[i].Position);
+                                SerializeVector3(writer, MapObjects[i].Position, mapScale);
 
                                 writer.WritePropertyName("rotation");
                                 SerializeVector3(writer, MapObjects[i].Rotation);
@@ -586,11 +614,11 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WritePropertyName("mModel");
                                 writer.WriteStartObject();
                                 writer.WritePropertyName("mPosition");
-                                SerializeVector3(writer, Areas[i].Position);
+                                SerializeVector3(writer, Areas[i].Position, mapScale);
                                 writer.WritePropertyName("mRotation");
                                 SerializeVector3(writer, Areas[i].GetRotation());
                                 writer.WritePropertyName("mScaling");
-                                SerializeVector3(writer, new Vector3d(Areas[i].LengthVector.X * 0.01, Areas[i].LengthVector.Y * 0.01, Areas[i].LengthVector.Z * 0.01));
+                                SerializeVector3(writer, new Vector3d(Areas[i].LengthVector.X * 0.01 * mapScale, Areas[i].LengthVector.Y * 0.01 * mapScale, Areas[i].LengthVector.Z * 0.01 * mapScale));
                                 writer.WritePropertyName("mShape");
                                 writer.WriteValue(Areas[i].Shape.ToString());
                                 writer.WriteEndObject();
@@ -636,7 +664,8 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WritePropertyName("from");
                                 writer.WriteValue((float)Cameras[i].FovBegin * cameraFovScale);
                                 writer.WritePropertyName("mSpeed");
-                                writer.WriteValue((int)(Cameras[i].FovSpeed * 4096f));
+                                var FovDiff = Math.Abs((Cameras[i].FovBegin * cameraFovScale) - (Cameras[i].FovEnd * cameraFovScale));
+                                writer.WriteValue((int)(Cameras[i].FovSpeed * FovDiff * 100f));
                                 writer.WritePropertyName("to");
                                 writer.WriteValue((float)Cameras[i].FovEnd * cameraFovScale);
                                 writer.WriteEndObject();
@@ -651,10 +680,16 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WriteValue(Cameras[i].Path == null ? 255 : Paths.IndexOf(Cameras[i].Path.Target));
 
                                 writer.WritePropertyName("mPathSpeed");
-                                writer.WriteValue((int)(Cameras[i].PathSpeed * 4096f));
+                                if (Cameras[i].Path == null)
+                                    writer.WriteValue(0);
+                                else
+                                {
+                                    var routeTime = (int)((Cameras[i].Path.Target.Points.Count - 3) / Cameras[i].PathSpeed);
+                                    writer.WriteValue((int)(GetTotalPathLength(Cameras[i].Path.Target) * mapScale / routeTime) * 100f); // todo
+                                }
 
                                 writer.WritePropertyName("mPosition");
-                                SerializeVector3(writer, Cameras[i].Position);
+                                SerializeVector3(writer, Cameras[i].Position, mapScale);
 
                                 writer.WritePropertyName("mRotation");
                                 SerializeVector3(writer, Cameras[i].Rotation);
@@ -671,11 +706,20 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WritePropertyName("mView");
                                 writer.WriteStartObject();
                                 writer.WritePropertyName("from");
-                                SerializeVector3(writer, Cameras[i].Target1);
+                                if (Cameras[i].Type == MkdsCameraType.FixedLookAtTargets || Cameras[i].Type == MkdsCameraType.RouteLookAtTargets)
+                                    SerializeVector3(writer, Cameras[i].Target1, mapScale);
+                                else if (Cameras[i].Type == MkdsCameraType.FollowDriverA || Cameras[i].Type == MkdsCameraType.FollowDriverB)
+                                    SerializeVector3(writer, new Vector3d(-Cameras[i].Target1.X, Cameras[i].Target1.Y, Cameras[i].Target1.Z));
+                                else
+                                    SerializeVector3(writer, Cameras[i].Target1);
                                 writer.WritePropertyName("mSpeed");
-                                writer.WriteValue((int)(Cameras[i].TargetSpeed * 4096f));
+                                var targetDistance = Vector3.Distance((Vector3)Cameras[i].Target1, (Vector3)Cameras[i].Target2);
+                                writer.WriteValue((int)((targetDistance * mapScale) * Cameras[i].TargetSpeed * 100f));  // todo
                                 writer.WritePropertyName("to");
-                                SerializeVector3(writer, Cameras[i].Target2);
+                                if (Cameras[i].Type == MkdsCameraType.FixedLookAtTargets || Cameras[i].Type == MkdsCameraType.RouteLookAtTargets)
+                                    SerializeVector3(writer, Cameras[i].Target2, mapScale);
+                                else
+                                    SerializeVector3(writer, new Vector3d(0,0,0), mapScale);
                                 writer.WriteEndObject();
 
                                 writer.WriteEndObject();
@@ -694,7 +738,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WriteValue(RespawnPoints[i].OriginalIndex);
 
                                 writer.WritePropertyName("position");
-                                SerializeVector3(writer, RespawnPoints[i].Position);
+                                SerializeVector3(writer, RespawnPoints[i].Position, mapScale);
 
                                 writer.WritePropertyName("range");
                                 writer.WriteValue(-1);
@@ -715,7 +759,7 @@ namespace HaroohiePals.NitroKart.Extensions
                                 writer.WriteStartObject();
 
                                 writer.WritePropertyName("mPosition");
-                                SerializeVector3(writer, CannonPoints[i].Position);
+                                SerializeVector3(writer, CannonPoints[i].Position, mapScale);
 
                                 writer.WritePropertyName("mRotation");
                                 SerializeVector3(writer, CannonPoints[i].Rotation);
@@ -770,7 +814,7 @@ namespace HaroohiePals.NitroKart.Extensions
                         }
                         writer.WriteEnd();
 
-                        writer.WritePropertyName("mMissionPoints");
+                        writer.WritePropertyName("mMissionPoints"); // todo
                         writer.WriteStartArray();
                         {
                             for (int i = 0; i < KartPointMission.Count; i++)
@@ -792,20 +836,20 @@ namespace HaroohiePals.NitroKart.Extensions
             return Encoding.ASCII.GetBytes(result);
         }
 
-        public static void SerializeVector2(JsonWriter writer, Vector2d value)
+        public static void SerializeVector2(JsonWriter writer, Vector2d value, float scale = 1f)
         {
             writer.WriteStartArray();
-            writer.WriteValue(value.X);
-            writer.WriteValue(value.Y);
+            writer.WriteValue(value.X * scale);
+            writer.WriteValue(value.Y * scale);
             writer.WriteEndArray();
         }
 
-        public static void SerializeVector3(JsonWriter writer, Vector3d value)
+        public static void SerializeVector3(JsonWriter writer, Vector3d value, float scale = 1f)
         {
             writer.WriteStartArray();
-            writer.WriteValue(value.X);
-            writer.WriteValue(value.Y);
-            writer.WriteValue(value.Z);
+            writer.WriteValue(value.X * scale);
+            writer.WriteValue(value.Y * scale);
+            writer.WriteValue(value.Z * scale);
             writer.WriteEndArray();
         }
 
@@ -911,6 +955,32 @@ namespace HaroohiePals.NitroKart.Extensions
                     return;
                 }
             }
+        }
+
+        public static double GetTotalPathLength(MkdsPath path, bool smooth = true)
+        {
+
+            if (path == null || path.Points.Count < 2)
+                return 0f;
+
+            double totalLength = 0f;
+
+            if (path.Points.Count >= 4 && smooth)
+            {
+                for (int i = 1; i < path.Points.Count - 2; i++)
+                {
+                    totalLength += Vector3.Distance((Vector3)path.Points[i].Position, (Vector3)path.Points[i+1].Position);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < path.Points.Count - 1; i++)
+                {
+                    totalLength += Vector3.Distance((Vector3)path.Points[i].Position, (Vector3)path.Points[i + 1].Position);
+                }
+            }
+
+            return totalLength;
         }
     }
 }
