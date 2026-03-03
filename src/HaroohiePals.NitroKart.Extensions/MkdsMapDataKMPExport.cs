@@ -492,8 +492,10 @@ namespace HaroohiePals.NitroKart.Extensions
 
                                 writer.WriteStartObject();
 
+                                bool interpolationOn = true;
+
                                 writer.WritePropertyName("interpolation");
-                                writer.WriteValue(isCameraRoute && Paths[i].Points.Count >= 4 ? 1 : 0);
+                                writer.WriteValue(interpolationOn && isCameraRoute && Paths[i].Points.Count >= 4 ? 1 : 0);
 
                                 writer.WritePropertyName("loopPolicy");
                                 writer.WriteValue(Convert.ToInt32(Paths[i].Loop));
@@ -506,7 +508,10 @@ namespace HaroohiePals.NitroKart.Extensions
                                     if (isCameraRoute && Paths[i].Points.Count >= 4)
                                     {
                                         //Skip first and last control points
-                                        if (j <= 0 || j >= Paths[i].Points.Count - 1)
+                                        if (j <= 0)
+                                            continue;
+
+                                        if (j >= Paths[i].Points.Count - 1 && !interpolationOn)
                                             continue;
                                     }
 
@@ -515,18 +520,16 @@ namespace HaroohiePals.NitroKart.Extensions
                                     writer.WritePropertyName("params");
                                     writer.WriteStartArray();
 
-                                    if (isCameraRoute)
+                                    if (isCameraRoute && j < Paths[i].Points.Count - 1)
                                     {
-                                        if (Paths[i].Points.Count >= 4)
+                                        var speedOutput = 0;
+                                        var routeTime = 1 / pathCamera.PathSpeed;
+                                        speedOutput = (int)((Vector3.Distance((Vector3)Paths[i].Points[j].Position, (Vector3)Paths[i].Points[j + 1].Position) * mapScale) / routeTime);
+                                        if (Paths[i].Points.Count >= 4 && j == Paths[i].Points.Count - 2)
                                         {
-                                            var routeTime = (int)((Paths[i].Points.Count - 3) / pathCamera.PathSpeed);
-                                            writer.WriteValue((int)((GetTotalPathLength(Paths[i]) * mapScale) / routeTime));
+                                            speedOutput = 0;
                                         }
-                                        else
-                                        {
-                                            var routeTime = (int)((Paths[i].Points.Count - 1) / pathCamera.PathSpeed);
-                                            writer.WriteValue((int)((GetTotalPathLength(Paths[i], false) * mapScale) / routeTime));
-                                        }
+                                        writer.WriteValue(speedOutput);
                                     }
                                     else
                                         writer.WriteValue(0);
